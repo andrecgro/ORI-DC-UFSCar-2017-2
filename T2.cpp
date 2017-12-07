@@ -1,5 +1,5 @@
 //*********************************************************************************
-// Trabalho 1 - Organizacao e Recuperacao de Arquivos - 2017/2
+// Trabalho 2 - Organizacao e Recuperacao de Arquivos - 2017/2
 // Docente: Prof. Dr. Ricardo Rodrigues Ciferri
 // Discentes: Andre Camargo Rocha RA:587052 e Sergio Hideki RA:551848
 //*********************************************************************************
@@ -46,9 +46,11 @@ void removeRegistro(); // Remove determinado registro dada uma chave (Modelo)
 void insereBlocoAux(registro reg); // Faz insercao de registro mas recebendo como parametro
 void insereLote(); // Insere um lote de carros aleatoriamente
 void criaArquivoIndex(); // Cria novo arquivo binario para trabalhar com os indices
-Index* lerIndexFile();
-void menu(); // Imprime o menu de opcoes na tela
 void insereIndex(char modeloAux[16], int pox, int qntdblocos);
+Index* lerIndexFile();
+void binaryIndexSearch();
+void removeByIndex();
+void menu(); // Imprime o menu de opcoes na tela
 //*********************************************************************************
 
 void criaArquivo(){//Cria arquivo e insere um bloco(8 registros) completamente vazio
@@ -248,30 +250,95 @@ void insereIndex(char modeloAux[16], int pos, int qntdblocos ){
     int idxLength = (ftell(arquivo)/sizeof(Index));
     fseek(arquivo,0, SEEK_SET);//reposicionando ponteiro de leitura no comeco do arquivo
 
-    Index* fileContent = lerIndexFile();
-
-    for(int i=0; i<idxLength;i++){
-        if(fileContent[i].key > modeloAux){
-            
-        }
-        else{
-            continue;
-        }
-    }
-
-    if (!arquivo) { // verifica se houve erro ao abrir o arquivo
+    if (!arquivo)
+    { // verifica se houve erro ao abrir o arquivo
         printf("Arquivo de indices nao pode ser aberto!\n\n");
         system("PAUSE");
     }
 
-    Index idx;
-    idx.bloco=qntdblocos;
-    idx.pos=pos;
-    strcpy(idx.key, modeloAux);
+    if(idxLength>0){
 
-    fwrite(&idx, sizeof(idx), 1, arquivo);
+        fclose(arquivo);
+        arquivo = fopen("index.dat", "a+b"); // cria arquivo para leitura e escrita em modo binario
+        Index *fileContent = lerIndexFile();
 
+        // Binary search in indexe's array
+        int min = 0;
+        int max = idxLength - 1;
+        int flagPrevEncontrado = -1;
+        int flagNextEncontrado = 10;
+        int guess = 0;
+        int notInArray = 0;
+        int toInsert = 0;
+
+        while ((flagPrevEncontrado < 0 && flagNextEncontrado > 0) || !notInArray)
+        {
+            if (max < min)
+            {
+                notInArray = 1;
+            }
+            guess = max / min;
+            flagPrevEncontrado = strcmp(fileContent[guess].key, modeloAux);
+            flagNextEncontrado = strcmp(fileContent[guess + 1].key, modeloAux);
+            if (flagPrevEncontrado > 0)
+            { // if fileContent[guess].key > modeloAux
+                max = guess - 1;
+            }
+            else if (flagPrevEncontrado < 0)
+            { // if fileContent[guess].key < modeloAux
+                min = guess + 1;
+            }
+            else if (flagPrevEncontrado < 0 && flagNextEncontrado > 0)
+            { // element found
+                toInsert = guess + 1;
+            }
+        }
+
+        if (notInArray)
+        {
+            printf("\n\nRegistro nao encontrado!\n\n");
+            system("PAUSE");
+            return;
+        }
+
+        int flag = 0;
+        // Rearranging indexes on index file
+        Index idxToWrite[idxLength + 1];
+        for (int i = 0; i < idxLength - 1; i++)
+        {
+            if (flag)
+            {
+                idxToWrite[i] = fileContent[i - 1];
+            }
+            else
+            {
+                idxToWrite[i] = fileContent[i];
+            }
+            if (i == pos)
+            {
+                flag = 1;
+                strcpy(idxToWrite[i].key, modeloAux);
+                idxToWrite[i].bloco = qntdblocos;
+                idxToWrite[i].pos = pos;
+            }
+        }
+        // Closing file to open using fopen but in another mode
+        fclose(arquivo);
+        arquivo = fopen("index.dat", "w+b");
+        fwrite(&idxToWrite, sizeof(Index), idxLength + 1, arquivo);
+    }
+    else{
+        
+
+        Index idx;
+        idx.bloco = qntdblocos;
+        idx.pos = pos;
+        strcpy(idx.key, modeloAux);
+
+        fwrite(&idx, sizeof(idx), 1, arquivo);
+    }
     fclose(arquivo);
+    return;
 }
 
 Index* lerIndexFile(){
@@ -301,46 +368,224 @@ Index* lerIndexFile(){
         return NULL;
     }
 
-    for(int i=0; i < idxLength; i++){
-        if (idxAux[i].key[0] != '#')
-        {
-            printf("\n\tModelo: %s\n\t", idxAux[i].key);
-            printf("\n\tBloco: %d\n\t", idxAux[i].bloco);
-            printf("\n\tPosicao: %d\n\t", idxAux[i].pos);
-        }
-    }
     fclose(index);
     system("PAUSE");
     return idxAux;
 }
+ 
+void binaryIndexSearch()
+{
+    char modelobuscado[16];
+    char buffer;
+    printf("Digite o modelo do carro buscado: ");
+    for (int i = 0; i < 15; i++)
+    {
 
+        buffer = getc(stdin); // recebe entrada do teclado e joga caractere por caractere para o buffer
+        if (buffer == '\n')
+        { // caso o usuario aperte ENTER, encerramos a string com o caractere NUL(\0)
+            modelobuscado[i] = '\0';
+            break; //saimos do laco de repeticao "for"
+        }
+        if (i == 14)
+        { // ignoramos todo o conteudo do buffer que esteja fora do tamanho do campo no registro
+            while (getc(stdin) != '\n')
+            {
+                continue;
+            }
+        }
+        modelobuscado[i] = buffer; //pega o caractere apontado pelo ponteiro de leitura e atribui para modelo[i]
+    }
+    modelobuscado[14] = '\0';
+    
 
-
-void removeIndex(char modeloAux[16]){
-    FILE* index;
-    FILE* dados;
+    FILE *index;
     index = fopen("index.dat", "r+b");
-    long fileSize = ftell(index);
-    int bloco=0;
-    int pos=0;
+
+    Index* idxAux;
+    fseek(index, 0, SEEK_END); //posicionando ponteiro de leitura no fim do arquivo para calcular seu tamanho
+    int idxLength = (ftell(index) / sizeof(Index));
+    idxAux = (Index *)malloc(idxLength * sizeof(Index));
+    
+    idxAux = lerIndexFile();
+    printf("parou aqui");
+    Index elementFound;
+
+    // Binary search in indexe's array
+    int min = 0;
+    int max = idxLength - 1;
+    int flagEncontrado = 10;
+    int guess = 0;
+    int notInArray = 0;
+
+    printf("chegou aqui, index: %s", index);
+
+    while (flagEncontrado != 0 || !notInArray)
+    {
+        if (max < min)
+        {
+            notInArray = 1;
+        }
+        guess = max / min;
+        flagEncontrado = strcmp(idxAux[guess].key, modelobuscado); // If element found, flagEncontrado = 0
+        if (flagEncontrado > 0)
+        { // if idxAux[guess].key > modeloAux
+            max = guess - 1;
+        }
+        else if (flagEncontrado < 0)
+        { // if idxAux[guess].key < modeloAux
+            min = guess + 1;
+        }
+        else
+        { // element found (flagEncontrado == 0)
+            elementFound = idxAux[guess];
+        }
+    }
+
+    if (notInArray)
+    {
+        printf("\n\nRegistro nao encontrado!\n\n");
+        system("PAUSE");
+        return;
+    }
+    FILE *dados;
+    int block = elementFound.bloco;
+    int pos = elementFound.pos;
+    char confirma;
+    dados = fopen("carros.dat", "r+b");
+    bloco blocoAux;
+    // Repositioning pointer and reading the index's block
+    fseek(dados, sizeof(bloco) * block, 0);
+    int lido = fread(&blocoAux, sizeof(registro), 8, dados);
+
+    if (lido != 0 && strcmp(blocoAux.reg[pos].modelo, modelobuscado))
+    {
+        printf("\n Registro Encontrado: \n");
+        printf("\n\tModelo: %s\n\t", blocoAux.reg[pos].modelo);
+        printf("\n\tMarca: %s\n\t", blocoAux.reg[pos].marca);
+        printf("\n\tPais de Fabricacao: %s\n\t", blocoAux.reg[pos].pais);
+        printf("\n\tAno: %s\n\t", blocoAux.reg[pos].ano);
+        printf("\n\tPotencia: %scv\n\n", blocoAux.reg[pos].pot);
+    }
+    fclose(dados);
+
+    free(idxAux);
+    fclose(index);
+
+    system("PAUSE");
+    return;
+}
+
+
+void removeByIndex(){
+    char modelobuscado[16];
+    char buffer;
+    printf("Digite o modelo do carro removido: ");
+    for (int i = 0; i < 15; i++)
+    {
+
+        buffer = getc(stdin); // recebe entrada do teclado e joga caractere por caractere para o buffer
+        if (buffer == '\n')
+        { // caso o usuario aperte ENTER, encerramos a string com o caractere NUL(\0)
+            modelobuscado[i] = '\0';
+            break; //saimos do laco de repeticao "for"
+        }
+        if (i == 14)
+        { // ignoramos todo o conteudo do buffer que esteja fora do tamanho do campo no registro
+            while (getc(stdin) != '\n')
+            {
+                continue;
+            }
+        }
+        modelobuscado[i] = buffer; //pega o caractere apontado pelo ponteiro de leitura e atribui para modelo[i]
+    }
+    modelobuscado[14] = '\0';
+
+    FILE *index;
+    index = fopen("index.dat", "r+b");
 
     Index *idxAux;
-    fseek(index, 0, SEEK_END);//posicionando ponteiro de leitura no comeco do arquivo
-    int idxLength = (ftell(index)/sizeof(Index));
-    idxAux = (Index*) malloc( idxLength * sizeof(Index) );
-    
-    // Binary search in indexe's array
-    Index pivot;
+    fseek(index, 0, SEEK_END); //posicionando ponteiro de leitura no fim do arquivo para calcular seu tamanho
+    int idxLength = (ftell(index) / sizeof(Index));
+    idxAux = (Index *)malloc(idxLength * sizeof(Index));
 
-    // Properly removing the index found
-    
-    /*for(int i=0; i<idxLength; i++){
-        if(strcmp(modeloAux.key,idxAux[i].key)){
-            bloco = idxAux[i].bloco;
-            pos = idxAux[i].pos;
-            strcpy(idxAux[i].key[0], "#");
+    idxAux = lerIndexFile();
+
+    Index elementFound;
+
+    // Binary search in indexe's array
+    int min = 0;
+    int max = idxLength - 1;
+    int flagEncontrado = 10;
+    int guess = 0;
+    int notInArray = 0;
+
+    while (flagEncontrado != 0 || !notInArray)
+    {
+        if (max < min)
+        {
+            notInArray = 1;
         }
-    } */
+        guess = max / min;
+        flagEncontrado = strcmp(idxAux[guess].key, modelobuscado); // If element found, flagEncontrado = 0
+        if (flagEncontrado > 0)
+        { // if idxAux[guess].key > modeloAux
+            max = guess - 1;
+        }
+        else if (flagEncontrado < 0)
+        { // if idxAux[guess].key < modeloAux
+            min = guess + 1;
+        }
+        else
+        { // element found (flagEncontrado == 0)
+            elementFound = idxAux[guess];
+        }
+    }
+    
+    if (notInArray)
+    {
+        printf("\n\nRegistro nao encontrado!\n\n");
+        system("PAUSE");
+        return;
+    }
+    FILE* dados;
+    int block = elementFound.bloco;
+    int pos = elementFound.pos;
+    char confirma;
+    dados = fopen("carros.dat", "r+b");
+    bloco blocoAux;
+    // Repositioning pointer and reading the index's block
+    fseek(dados,sizeof(bloco)*block,0);
+    int lido = fread(&blocoAux,sizeof(registro),8,dados);
+
+
+    if (lido != 0 && strcmp(blocoAux.reg[pos].modelo, modelobuscado))
+    {
+        printf("\n Registro Encontrado: \n");
+        printf("\n\tModelo: %s\n\t", blocoAux.reg[pos].modelo);
+        printf("\n\tMarca: %s\n\t", blocoAux.reg[pos].marca);
+        printf("\n\tPais de Fabricacao: %s\n\t", blocoAux.reg[pos].pais);
+        printf("\n\tAno: %s\n\t", blocoAux.reg[pos].ano);
+        printf("\n\tPotencia: %scv\n\n", blocoAux.reg[pos].pot);
+        printf("\nConfirme a remocao do registro acima(S/N): ");
+        scanf("%c", &confirma);
+        switch (confirma)
+        {
+        case 'S':
+            blocoAux.reg[pos].modelo[0] = '#';
+            fseek(dados,sizeof(bloco)*block,0);
+            fwrite(&blocoAux, sizeof(registro), 8, dados);
+            printf("\n\nRegistro removido com sucesso!\n\n");
+            break;
+        case 'N':
+            printf("\n\nRegistro NAO removido!\n\n");
+            break;
+        default:
+            break;
+        }
+    }
+    fclose(dados);
+
     int flag = 0;
     // Rearranging indexes on index file
     Index idxToWrite[idxLength-1];
@@ -360,58 +605,13 @@ void removeIndex(char modeloAux[16]){
     // Closing file to open using fopen but in another mode
     fclose(index);
     index = fopen("index.dat", "w+b");
-    fwrite(&idxToWrite, sizeof(Index), idxLength-1, index);
+    fwrite(&idxToWrite, sizeof(Index), idxLength - 1, index);
     fclose(index);
+
+    system("PAUSE");
+    return;
 }
 /* 
-void removeIndex(char modeloAux[16], int pos, int qntdblocos){
-    FILE* index;
-    index = fopen("index.dat", "r+b");
-    long fileSize = ftell(index);
-    int lido = 0;
-    int encontrado = 0;
-    int removidos = 0;
-    Index idxReturn;
-
-
-    Index *idxAux;
-    fseek(index,0, SEEK_END);//posicionando ponteiro de leitura no comeco do arquivo
-    int idxLength = (ftell(index)/sizeof(Index));
-    idxAux = (Index*) malloc( idxLength * sizeof(Index) );
-
-    index *idxAux = lerIndexFile();
-
-    for(int i=0;i<idxLength;i++){
-        if(strcmp(idxAux[i].key, modeloAux) && idxAux.bloco == qntdblocos && idxAux.pos == pos){
-            strcpy(idxAux[i].key[0], "#");
-            removidos++;
-            //funcao para fazer shift
-            break;
-        }
-    }
-    strcpy(idxAux[idxLength-1].key,"#");
-
-    int j = 0;
-    for(int i=0; i<idxLength-removidos;i++){
-        if(strcmp(idxAux.key[i]), "#"){
-            i++;
-        }
-        else{
-            idxToWrite[j] = idxAux[i];
-            j++;
-        }
-    }
-    
-    fclose(index);
-    
-    free(idxAux);
-    newIndex = fopen("index.dat", "w+b");
-    fwrite(&idxToWrite, sizeof(Index), idxLength-removidos, newIndex);
-    fclose(newIndex);
-    return 
-    
-} */
-
 void buscaRegistro(){
     FILE* arquivo;
     arquivo = fopen("carros.dat", "rb");
@@ -473,7 +673,7 @@ void buscaRegistro(){
     fclose(arquivo);
     system("PAUSE");
     return;
-}
+} */
 
 
 
@@ -654,7 +854,7 @@ void listaArquivo(){
     system("PAUSE");
     return;
 }
-
+/* 
 void removeRegistro(){
     FILE* arquivo;
     arquivo = fopen("carros.dat", "r+b");
@@ -730,7 +930,7 @@ void removeRegistro(){
     fclose(arquivo);
     system("PAUSE");
     return;
-}
+} */
 void insereBlocoAux(registro reg){
     FILE* arquivo;
     arquivo = fopen("carros.dat", "r+b");// cria arquivo para leitura e escrita em modo binario
@@ -921,11 +1121,11 @@ int opcao;
 				break;// sai do case e retorna para o menu apos o retorno de criaArquivo()
 			case (2): insereRegistro();
 				break;// sai do case e retorna para o menu apos o retorno de insereRegistro()
-            case (3): buscaRegistro();
+            case (3): binaryIndexSearch();//buscaRegistro();
 				break;// sai do case e retorna para o menu apos o retorno de buscaRegistro()
             case (4): listaRegistros();
 				break;// sai do case e retorna para o menu apos o retorno de listaRegistro()
-            case (5): removeRegistro();
+            case (5): removeByIndex();//removeRegistro();
 				break;// sai do case e retorna para o menu apos o retorno de removeRegistro()
             case (6): insereLote();
 				break;// sai do case e retorna para o menu apos o retorno de insereLote()
